@@ -1,0 +1,15 @@
+{
+	auto_https disable_redirects
+}
+
+https://{$AP_BIND_IP}:8443 {
+	bind {$AP_BIND_IP}
+	tls internal
+	reverse_proxy 127.0.0.1:18080
+}
+
+https://{$AP_BIND_IP}:8444 {
+	bind {$AP_BIND_IP}
+	tls internal
+	reverse_proxy 127.0.0.1:18081
+}

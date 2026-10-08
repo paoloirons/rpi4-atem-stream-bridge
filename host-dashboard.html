@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Pi ATEM · Host Control</title>
+  <style>
+    :root{font:16px system-ui,sans-serif;background:#0b1017;color:#e9f0f7;color-scheme:dark}
+    *{box-sizing:border-box}body{max-width:1040px;margin:0 auto;padding:24px}
+    header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin:10px 0 24px}
+    h1{font-size:1.55rem;margin:0 0 5px}.sub,small,.muted{color:#9baabc}
+    a{color:#69b7ff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px}
+    .card{background:#141c26;border:1px solid #283544;border-radius:13px;padding:16px}
+    .metric{font-size:1.7rem;font-weight:700;margin:7px 0}.metric small{font-size:.85rem;font-weight:400}
+    h2{font-size:1.05rem;margin:0 0 12px}.section{margin-top:18px}
+    label{display:block;font-size:.9rem;margin:12px 0 5px;color:#b8c5d3}
+    input,select,button{width:100%;font:inherit;color:inherit;border:1px solid #3a4a5b;background:#0d141d;border-radius:8px;padding:10px}
+    button{cursor:pointer;background:#1374bd;border:0;font-weight:650;margin-top:14px}button.secondary{background:#354252}
+    .form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 14px}
+    .notice{display:none;padding:13px 15px;border-radius:9px;margin:14px 0;background:#243342;border:1px solid #456079}
+    .notice.error{background:#3c2024;border-color:#8c414b}.notice.ok{background:#173629;border-color:#34714f}
+    table{width:100%;border-collapse:collapse}td,th{text-align:left;border-bottom:1px solid #293543;padding:8px 5px;overflow-wrap:anywhere}th{color:#aebbc9;font-weight:500}
+    .bar{height:7px;border-radius:9px;background:#26313d;overflow:hidden}.bar i{display:block;background:#49a9ec;height:100%;width:0}
+    @media(max-width:560px){body{padding:16px}header{display:block}header a{display:inline-block;margin-top:12px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>Host &amp; access point</h1><div class="sub">Raspberry Pi system health, Wi-Fi clients, and network settings.</div></div>
+    <a id="video-link" href="https://192.168.50.1:8443">Open video control ↗</a>
+  </header>
+  <div id="notice" class="notice"></div>
+  <div id="metrics" class="grid">
+    <section class="card"><div class="muted">CPU</div><div class="metric" id="cpu">—</div><div class="bar"><i id="cpu-bar"></i></div></section>
+    <section class="card"><div class="muted">Memory</div><div class="metric" id="memory">—</div><div class="bar"><i id="memory-bar"></i></div></section>
+    <section class="card"><div class="muted">CPU temperature</div><div class="metric" id="temperature">—</div><small id="load"></small></section>
+    <section class="card"><div class="muted">Storage · root filesystem</div><div class="metric" id="disk">—</div><small id="uptime"></small></section>
+    <section class="card"><div class="muted">Wi-Fi clients</div><div class="metric" id="clients">—</div><small id="regulatory"></small></section>
+  </div>
+  <section class="card section">
+    <h2>Access point settings</h2>
+    <div class="muted">Changes are applied with a 90-second rollback. Reconnect to the new Wi-Fi, open this page again, then confirm.</div>
+    <form id="ap-form">
+      <div class="form">
+        <div><label for="ssid">Wi-Fi name (SSID)</label><input id="ssid" maxlength="32" required></div>
+        <div><label for="password">New Wi-Fi password</label><input id="password" type="password" minlength="8" maxlength="63" placeholder="Leave blank to keep the current password"></div>
+        <div><label for="channel">2.4 GHz channel</label><select id="channel"><option value="1">1</option><option value="6">6</option><option value="11">11</option></select></div>
+        <div><label for="address">Access point address</label><input id="address" inputmode="decimal" placeholder="192.168.50.1" required></div>
+      </div>
+      <button id="apply" type="submit">Apply with 90-second rollback</button>
+      <button id="confirm" class="secondary" type="button" hidden>Confirm new network</button>
+    </form>
+  </section>
+  <section class="card section">
+    <h2>Network interfaces</h2>
+    <table><thead><tr><th>Interface</th><th>Link</th><th>IPv4 addresses</th></tr></thead><tbody id="interfaces"></tbody></table>
+    <p class="muted" id="routes"></p>
+  </section>
+  <p class="muted">This dashboard is available on the Raspberry Pi access point. Keep that network protected with a strong WPA2 password.</p>
+<script>
+const $=id=>document.getElementById(id);
+function notice(message,type=''){const box=$('notice');box.textContent=message;box.className='notice '+type;box.style.display='block';}
+function setBar(id,value){$(id).style.width=`${Math.max(0,Math.min(100,value||0))}%`;}
+function duration(seconds){const d=Math.floor(seconds/86400),h=Math.floor(seconds%86400/3600),m=Math.floor(seconds%3600/60);return `${d}d ${h}h ${m}m`;}
+async function refresh(){
+  try{
+    const response=await fetch('/api/status',{cache:'no-store'});if(!response.ok)throw new Error(await response.text());
+    const s=await response.json();
+    $('cpu').textContent=s.cpu_percent===null?'Sampling…':`${s.cpu_percent}%`;if(s.cpu_percent!==null)setBar('cpu-bar',s.cpu_percent);
+    $('memory').textContent=`${s.memory_used_mb} / ${s.memory_total_mb} MB`;setBar('memory-bar',100*s.memory_used_mb/Math.max(1,s.memory_total_mb));
+    $('temperature').textContent=s.temperature_c===null?'Unavailable':`${s.temperature_c} °C`;
+    $('load').textContent=`Load average ${s.load.join(' · ')}`;$('disk').textContent=`${s.disk_free_gb} GB free`;
+    $('uptime').textContent=`Uptime ${duration(s.uptime_seconds)}`;$('clients').textContent=s.wifi_clients;
+    $('regulatory').textContent=`${s.regulatory_domain} · ${s.wifi_connection}`;
+    $('video-link').href=`https://${s.ap.address}:8443`;
+    $('interfaces').innerHTML=s.interfaces.map(i=>`<tr><td>${i.name}</td><td>${i.state}</td><td>${i.addresses.join('<br>')||'—'}</td></tr>`).join('');
+    $('routes').textContent='Default route: '+(s.default_routes.map(r=>`${r.gateway} via ${r.interface}`).join(' · ')||'none');
+    if(!window.formDirty){$('ssid').value=s.ap.ssid||'';$('address').value=s.ap.address||'';$('channel').value=s.ap.channel||'6';}
+    $('confirm').hidden=!s.pending_change;
+    if(s.pending_change)notice(`New network settings are waiting for confirmation. ${s.pending_seconds} seconds remain before automatic rollback.`);
+  }catch(e){notice(`Could not read host status: ${e.message}`,'error');}
+}
+$('ap-form').addEventListener('submit',async event=>{
+  event.preventDefault();$('apply').disabled=true;
+  notice('Applying the network change. Wi-Fi may disconnect; reconnect and confirm within 90 seconds.');
+  try{
+    const response=await fetch('/api/ap/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid:$('ssid').value,password:$('password').value,channel:$('channel').value,address:$('address').value})});
+    const result=await response.json();if(!response.ok)throw new Error(result.error||'Apply failed');
+    $('password').value='';$('confirm').hidden=false;
+    notice(`Access point changed. Reconnect to “${$('ssid').value}”, open https://${result.address}:8444 and confirm within 90 seconds. Otherwise the old settings return automatically.`,'ok');
+  }catch(e){notice(`The connection dropped during the change. If the new access point is visible, reconnect to it and confirm within 90 seconds. Otherwise the old settings will return automatically. (${e.message})`,'error');}
+  finally{$('apply').disabled=false;window.formDirty=false;}
+});
+document.querySelectorAll('#ssid,#password,#channel,#address').forEach(input=>input.addEventListener('input',()=>window.formDirty=true));
+$('confirm').addEventListener('click',async()=>{
+  try{const r=await fetch('/api/ap/confirm',{method:'POST'});const data=await r.json();if(!r.ok)throw new Error(data.error||'Confirmation failed');$('confirm').hidden=true;notice('New access point settings confirmed.','ok');}
+  catch(e){notice(e.message,'error');}
+});
+refresh();setInterval(refresh,5000);
+</script>
+</body>
+</html>

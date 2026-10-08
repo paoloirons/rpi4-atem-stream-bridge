@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pi SRT to ATEM</title>
+  <style>
+    :root{color-scheme:dark;font:16px system-ui,sans-serif;background:#101318;color:#f3f5f7}
+    body{margin:0 auto;max-width:760px;padding:24px}
+    h1{font-size:1.5rem;margin:0 0 8px}.muted{color:#aeb7c2}a{color:#70bfff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:24px}
+    .card{background:#1a2028;border:1px solid #303a46;border-radius:12px;padding:18px}
+    select,button{font:inherit;border-radius:8px;padding:10px;border:1px solid #455263;background:#12171e;color:#fff}
+    select{width:100%;margin:12px 0}button{cursor:pointer;background:#1769aa;border:0;width:100%}
+    .state{margin-top:14px;font-size:.9rem;color:#aeb7c2}.online{color:#58d68d}.offline{color:#ff8b83}
+  </style>
+</head>
+<body>
+  <h1>Raspberry Pi SRT → ATEM</h1>
+  <div class="muted">Choose which phone feed appears on each HDMI output.</div>
+  <p><a id="host-link" href="#">Host and access point dashboard ↗</a></p>
+  <div id="cards" class="grid"></div>
+  <p class="muted">Mobile publishing: <code>srt://192.168.50.1:8890?streamid=publish:cam1</code> or <code>cam2</code>.</p>
+<script>
+const outputs=[['hdmi0','HDMI 0'],['hdmi1','HDMI 1']];
+document.querySelector('#host-link').href=`https://${location.hostname}:8444`;
+const card=(id,label)=>`<section class="card"><h2>${label}</h2><label for="${id}-source">Feed</label><select id="${id}-source"><option value="black">Black / standby</option><option value="cam1">Phone / cam1</option><option value="cam2">Phone / cam2</option></select><button onclick="applyFeed('${id}')">Apply</button><div id="${id}-state" class="state">Checking…</div></section>`;
+document.querySelector('#cards').innerHTML=outputs.map(x=>card(...x)).join('');
+async function applyFeed(id){const source=document.querySelector(`#${id}-source`).value;const r=await fetch(`/api/outputs/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source})});if(!r.ok)alert(await r.text());refresh();}
+async function refresh(){try{const s=await (await fetch('/api/status')).json();for(const [id,label] of outputs){const box=document.querySelector(`#${id}-state`);box.textContent=`Player: ${s.outputs.find(x=>x.id===id)?.source||'unknown'} · cam1: ${s.paths.cam1?'live':'offline'} · cam2: ${s.paths.cam2?'live':'offline'}`;box.className='state '+((s.paths.cam1||s.paths.cam2)?'online':'offline');}}catch{for(const [id] of outputs)document.querySelector(`#${id}-state`).textContent='Panel/API unavailable';}}
+refresh();setInterval(refresh,2000);
+</script>
+</body>
+</html>

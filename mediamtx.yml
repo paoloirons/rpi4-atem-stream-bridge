@@ -1,0 +1,12 @@
+# MediaMTX accepts two named SRT publishing paths from Larix Broadcaster.
+api: yes
+apiAddress: :9997
+
+rtsp: yes
+rtspAddress: :8554
+
+srt: yes
+srtAddress: :8890
+
+paths:
+  all_others: {}

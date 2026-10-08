@@ -1,0 +1,55 @@
+name: rpi-srt-atem
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.1
+    restart: unless-stopped
+    command: ["/mediamtx", "/mediamtx.yml"]
+    ports:
+      - "${AP_BIND_IP:-192.168.50.1}:8890:8890/udp"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      - video
+
+  controller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    shm_size: 256mb
+    depends_on:
+      - mediamtx
+    environment:
+      MEDIAMTX_API: http://mediamtx:9997
+      RTSP_BASE: rtsp://mediamtx:8554
+      DISPLAY: ${DISPLAY:-:0}
+      HDMI0_WINDOW_POS: ${HDMI0_WINDOW_POS:-0,0}
+      HDMI1_WINDOW_POS: ${HDMI1_WINDOW_POS:-1920,0}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    ports:
+      - "127.0.0.1:18080:8080/tcp"
+    networks:
+      - video
+
+  panel:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - controller
+    environment:
+      AP_BIND_IP: ${AP_BIND_IP:-192.168.50.1}
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+networks:
+  video:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

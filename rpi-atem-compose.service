@@ -1,0 +1,18 @@
+[Unit]
+Description=Raspberry Pi ATEM video bridge containers
+Requires=docker.service NetworkManager.service
+After=docker.service NetworkManager.service rpi-atem-host.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/rpi-srt-atem
+ExecStartPre=/usr/bin/nmcli connection up rpi-atem-ap ifname wlan0
+ExecStart=/usr/bin/docker compose --project-directory /opt/rpi-srt-atem up -d
+ExecStop=/usr/bin/docker compose --project-directory /opt/rpi-srt-atem down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

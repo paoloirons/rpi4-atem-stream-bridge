@@ -1,0 +1,22 @@
+[Unit]
+Description=Raspberry Pi ATEM host control agent
+After=NetworkManager.service docker.service
+Wants=NetworkManager.service docker.service
+
+[Service]
+Type=simple
+User=root
+Environment=RPI_ATEM_ROOT=/opt/rpi-srt-atem
+Environment=AP_PROFILE=rpi-atem-ap
+Environment=AP_IFACE=wlan0
+ExecStart=/usr/bin/python3 /opt/rpi-srt-atem/host-agent.py
+Restart=on-failure
+RestartSec=3
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+ReadWritePaths=/opt/rpi-srt-atem/.env /opt/rpi-srt-atem/.env.new
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
